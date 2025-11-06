@@ -1,0 +1,1771 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>采办项目疑似串通投标分析模型</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind 配置 -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#165DFF',
+            secondary: '#0F3FA8',
+            success: '#36D399',
+            warning: '#FBBD23',
+            danger: '#F87272',
+            neutral: {
+              100: '#F8FAFC',
+              200: '#F1F5F9',
+              300: '#E2E8F0',
+              400: '#CBD5E1',
+              500: '#94A3B8',
+              600: '#64748B',
+              700: '#334155',
+              800: '#1E293B',
+              900: '#0F172A',
+            }
+          },
+          fontFamily: {
+            inter: ['Inter', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+  
+  <style type="text/tailwindcss">
+    @layer utilities {
+  .content-auto { content-visibility: auto; }
+  .scrollbar-thin { scrollbar-width: thin; }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .text-shadow { text-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  .transition-height { transition: max-height 0.3s ease-in-out; }
+
+  /* ===== 表头：最浅蓝色背景 + 深蓝文字 + 居中 + 自动列宽 ===== */
+  #results-table thead tr { background-color: #EFF6FF; }  /* blue-50 */
+  #results-table thead th {
+    color: #1E40AF;         /* blue-800，深色易读 */
+    text-align: center;
+    vertical-align: middle;
+    white-space: nowrap;
+    padding: 0.75rem 0.5rem;
+    width: auto;             /* 让浏览器按内容决定宽度 */
+    min-width: max-content;
+	border-right: 1px solid #ffffff;   /* 白线分隔 */
+  }
+
+  /* ===== 数据行 ===== */
+  #results-table tbody td {
+    text-align: center;
+    vertical-align: middle;
+    white-space: nowrap;
+    padding: 0.75rem 0.5rem;
+  }
+  /* 前 4 列：文字多长列就多宽 */
+  #results-table tbody td:nth-child(-n+4) {
+    white-space: nowrap;
+    width: auto;
+    min-width: max-content;
+  }
+  /* 第 5 列：可换行 + 左对齐 */
+  #results-table tbody td:nth-child(5) {
+    white-space: normal;
+    text-align: left;
+    word-break: break-word;
+    max-width: 40rem;
+  }
+}
+	/* 页面淡入淡出效果 */
+body {
+  transition: opacity 0.35s ease;
+}
+
+/* 主页按钮点击效果 */
+#btn-home:active {
+  transform: scale(0.95);
+}
+
+/* 内容区域平滑过渡 */
+.transition-all {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 300ms;
+}
+  </style>
+</head>
+
+<body class="font-inter bg-neutral-100 text-neutral-800 min-h-screen flex flex-col">
+  <!-- 顶部导航栏 -->
+  <header class="bg-white shadow-md sticky top-0 z-50 transition-all duration-300">
+    <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <i class="fa fa-bar-chart text-primary text-2xl"></i>
+        <h1 class="text-xl md:text-2xl font-bold text-neutral-800">采办项目疑似串通投标分析模型</h1>
+      </div>
+      <div class="flex items-center space-x-4">
+        <!-- 修改开始：右上角帮助按钮，hover 显示提示 -->
+<button class="hidden md:flex items-center text-neutral-600 hover:text-primary transition-colors relative group">
+  <i class="fa fa-question-circle mr-1"></i>
+  <span>帮助</span>
+  <!-- 悬停提示 -->
+  <span class="absolute top-full mt-2 left-1/2 -translate-x-1/2
+               whitespace-nowrap px-3 py-2 text-sm text-white bg-neutral-800
+               rounded shadow-lg opacity-0 group-hover:opacity-100
+               transition-opacity duration-300 pointer-events-none">
+    哈喽，你好啊！如有疑问，请随时联系 wangxch57 哟！☺️
+  </span>
+</button>
+<!-- 修改结束 -->
+<!-- 回到首页图标 -->
+<button id="btn-home"
+        class="hidden md:flex items-center justify-center w-10 h-10 rounded-full
+               text-neutral-600 hover:text-primary hover:bg-primary/10
+               transition-all duration-300 transform hover:scale-110"
+        aria-label="回到首页">
+  <i class="fa fa-home text-xl"></i>
+</button>
+        <button class="md:hidden text-neutral-600 hover:text-primary">
+          <i class="fa fa-bars text-xl"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主要内容区 -->
+  <main class="flex-grow container mx-auto px-4 py-6">
+    <!-- 页面介绍 -->
+    <div class="bg-white rounded-xl shadow-sm p-6 mb-8 transform hover:shadow-md transition-shadow">
+      <h2 class="text-xl font-semibold mb-3 text-neutral-800">模型介绍</h2>
+      <p class="text-neutral-600 mb-4">
+        本模型用于分析采办项目投标过程中可能存在的串通行为，通过导入相关数据表格，
+        系统将自动进行交叉分析，检测不同供应商之间的人员、联系方式和地址等信息交叉情况，
+        帮助发现潜在的串通投标线索。
+      </p>
+      <div class="flex items-center text-sm text-primary">
+        <i class="fa fa-info-circle mr-2"></i>
+        <span>请按照要求依次导入所需数据表格，模型将进行自动分析并给出线索</span>
+      </div>
+    </div>
+
+    <!-- 数据导入区域 -->
+    <section class="mb-10">
+      <h2 class="text-xl font-semibold mb-6 text-neutral-800 flex items-center">
+        <i class="fa fa-upload text-primary mr-2"></i>数据导入
+      </h2>
+      
+      <!-- 导入表格1：投标供应商清单 -->
+      <div class="bg-white rounded-xl shadow-sm mb-6 overflow-hidden">
+        <div class="p-4 border-b border-neutral-200 flex justify-between items-center cursor-pointer import-header" data-target="table1-content">
+          <div class="flex items-center">
+            <span class="inline-flex items-center justify-center w-6 h-6 bg-primary text-white rounded-full text-sm mr-2">1</span>
+            <h3 class="font-medium">采办项目投标供应商清单</h3>
+          </div>
+          <i class="fa fa-chevron-down text-neutral-500 transition-transform duration-300"></i>
+        </div>
+        
+        <div id="table1-content" class="p-4 max-h-[700px] overflow-y-auto transition-height">
+          <div class="mb-4">
+            <p class="text-sm text-neutral-600 mb-2">
+              <i class="fa fa-info-circle text-primary mr-1"></i>
+              数据字段：采办-标段编号、采办-标段名称、投标供应商
+            </p>
+            <p class="text-sm text-neutral-500 italic">
+              提示：该数据表可从线下获取或使用数智化审计平台下载
+            </p>
+			<button class="text-sm text-primary hover:underline" onclick="downloadTemplate(1)">
+				<i class="fa fa-download mr-1"></i>下载模板
+			</button>
+          </div>
+		  
+          <div class="border-2 border-dashed border-neutral-300 rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer file-drop-area" data-table="1">
+            <i class="fa fa-file-excel-o text-4xl text-neutral-400 mb-3"></i>
+            <p class="mb-2 text-neutral-600">拖放Excel文件到此处，或</p>
+            <button class="bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg transition-colors">
+              选择文件
+            </button>
+            <input type="file" class="hidden" accept=".xlsx,.xls,.csv">
+          </div>
+          
+          <div class="mt-4 hidden file-preview">
+            <div class="flex items-center justify-between p-3 bg-neutral-100 rounded-lg">
+              <div class="flex items-center">
+                <i class="fa fa-file-excel-o text-success mr-2"></i>
+                <span class="text-sm font-medium filename">投标供应商清单.xlsx</span>
+              </div>
+              <button class="text-neutral-500 hover:text-danger transition-colors">
+                <i class="fa fa-times"></i>
+              </button>
+            </div>
+            
+            <!-- 数据预览区域 -->
+            <div class="mt-4 border border-neutral-200 rounded-lg overflow-hidden">
+              <div class="bg-neutral-50 p-3 border-b border-neutral-200 flex justify-between items-center">
+                <h4 class="font-medium text-sm text-neutral-700">数据预览 (前5行)</h4>
+                <span class="text-xs text-neutral-500 total-records">共 0 条记录</span>
+              </div>
+              <div class="overflow-x-auto data-preview-container max-h-60"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 导入表格2：供应商基本信息表 -->
+      <div class="bg-white rounded-xl shadow-sm mb-6 overflow-hidden">
+        <div class="p-4 border-b border-neutral-200 flex justify-between items-center cursor-pointer import-header" data-target="table2-content">
+          <div class="flex items-center">
+            <span class="inline-flex items-center justify-center w-6 h-6 bg-primary text-white rounded-full text-sm mr-2">2</span>
+            <h3 class="font-medium">供应商基本信息表</h3>
+          </div>
+          <i class="fa fa-chevron-down text-neutral-500 transition-transform duration-300"></i>
+        </div>
+        
+        <div id="table2-content" class="p-4 max-h-[700px] overflow-y-auto transition-height hidden">
+          <div class="mb-4">
+            <p class="text-sm text-neutral-600 mb-2">
+              <i class="fa fa-info-circle text-primary mr-1"></i>
+              数据字段：原文件导入名称，系统匹配企业名称，登记状态统一社会信用代码，法定代表人等42个字段
+            </p>
+            <p class="text-sm text-neutral-500 italic">
+              提示：该数据表可从天眼查官网下载（下载后直接导入即可，模型将从第二行开始读取数据）
+            </p>
+			<button class="text-sm text-primary hover:underline" onclick="downloadTemplate(2)">
+				<i class="fa fa-download mr-1"></i>下载模板
+			</button>			
+          </div>
+          
+          <div class="border-2 border-dashed border-neutral-300 rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer file-drop-area" data-table="2">
+            <i class="fa fa-file-excel-o text-4xl text-neutral-400 mb-3"></i>
+            <p class="mb-2 text-neutral-600">拖放Excel文件到此处，或</p>
+            <button class="bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg transition-colors">
+              选择文件
+            </button>
+            <input type="file" class="hidden" accept=".xlsx,.xls,.csv">
+          </div>
+          
+          <div class="mt-4 hidden file-preview">
+            <div class="flex items-center justify-between p-3 bg-neutral-100 rounded-lg">
+              <div class="flex items-center">
+                <i class="fa fa-file-excel-o text-success mr-2"></i>
+                <span class="text-sm font-medium filename">供应商基本信息表.xlsx</span>
+              </div>
+              <button class="text-neutral-500 hover:text-danger transition-colors">
+                <i class="fa fa-times"></i>
+              </button>
+            </div>
+            
+            <!-- 数据预览区域 -->
+            <div class="mt-4 border border-neutral-200 rounded-lg overflow-hidden">
+              <div class="bg-neutral-50 p-3 border-b border-neutral-200 flex justify-between items-center">
+                <h4 class="font-medium text-sm text-neutral-700">数据预览 (前5行)</h4>
+                <span class="text-xs text-neutral-500 total-records">共 0 条记录</span>
+              </div>
+              <div class="overflow-x-auto data-preview-container max-h-60"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 导入表格3：实控人信息表 -->
+      <div class="bg-white rounded-xl shadow-sm mb-6 overflow-hidden">
+        <div class="p-4 border-b border-neutral-200 flex justify-between items-center cursor-pointer import-header" data-target="table3-content">
+          <div class="flex items-center">
+            <span class="inline-flex items-center justify-center w-6 h-6 bg-primary text-white rounded-full text-sm mr-2">3</span>
+            <h3 class="font-medium">实控人信息表</h3>
+          </div>
+          <i class="fa fa-chevron-down text-neutral-500 transition-transform duration-300"></i>
+        </div>
+        
+        <div id="table3-content" class="p-4 max-h-[700px] overflow-y-auto transition-height hidden">
+          <div class="mb-4">
+            <p class="text-sm text-neutral-600 mb-2">
+              <i class="fa fa-info-circle text-primary mr-1"></i>
+              数据字段：企业名称、实控人、股份、开始时间、结束时间
+            </p>
+            <p class="text-sm text-neutral-500 italic">
+              提示：该数据表可从数智化审计平台下载
+            </p>
+			<button class="text-sm text-primary hover:underline" onclick="downloadTemplate(3)">
+				<i class="fa fa-download mr-1"></i>下载模板
+			</button>			
+          </div>
+          
+          <div class="border-2 border-dashed border-neutral-300 rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer file-drop-area" data-table="3">
+            <i class="fa fa-file-excel-o text-4xl text-neutral-400 mb-3"></i>
+            <p class="mb-2 text-neutral-600">拖放Excel文件到此处，或</p>
+            <button class="bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg transition-colors">
+              选择文件
+            </button>
+            <input type="file" class="hidden" accept=".xlsx,.xls,.csv">
+          </div>
+          
+          <div class="mt-4 hidden file-preview">
+            <div class="flex items-center justify-between p-3 bg-neutral-100 rounded-lg">
+              <div class="flex items-center">
+                <i class="fa fa-file-excel-o text-success mr-2"></i>
+                <span class="text-sm font-medium filename">实控人信息表.xlsx</span>
+              </div>
+              <button class="text-neutral-500 hover:text-danger transition-colors">
+                <i class="fa fa-times"></i>
+              </button>
+            </div>
+            
+            <!-- 数据预览区域 -->
+            <div class="mt-4 border border-neutral-200 rounded-lg overflow-hidden">
+              <div class="bg-neutral-50 p-3 border-b border-neutral-200 flex justify-between items-center">
+                <h4 class="font-medium text-sm text-neutral-700">数据预览 (前5行)</h4>
+                <span class="text-xs text-neutral-500 total-records">共 0 条记录</span>
+              </div>
+              <div class="overflow-x-auto data-preview-container max-h-60"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 导入表格4：股东信息表 -->
+      <div class="bg-white rounded-xl shadow-sm mb-6 overflow-hidden">
+        <div class="p-4 border-b border-neutral-200 flex justify-between items-center cursor-pointer import-header" data-target="table4-content">
+          <div class="flex items-center">
+            <span class="inline-flex items-center justify-center w-6 h-6 bg-primary text-white rounded-full text-sm mr-2">4</span>
+            <h3 class="font-medium">股东信息表</h3>
+          </div>
+          <i class="fa fa-chevron-down text-neutral-500 transition-transform duration-300"></i>
+        </div>
+        
+        <div id="table4-content" class="p-4 max-h-[700px] overflow-y-auto transition-height hidden">
+          <div class="mb-4">
+            <p class="text-sm text-neutral-600 mb-2">
+              <i class="fa fa-info-circle text-primary mr-1"></i>
+              数据字段：企业名称、股东名、股份、开始时间、结束时间
+            </p>
+            <p class="text-sm text-neutral-500 italic">
+              提示：该数据表可从数智化审计平台下载
+            </p>
+			<button class="text-sm text-primary hover:underline" onclick="downloadTemplate(4)">
+				<i class="fa fa-download mr-1"></i>下载模板
+			</button>			
+          </div>
+          
+          <div class="border-2 border-dashed border-neutral-300 rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer file-drop-area" data-table="4">
+            <i class="fa fa-file-excel-o text-4xl text-neutral-400 mb-3"></i>
+            <p class="mb-2 text-neutral-600">拖放Excel文件到此处，或</p>
+            <button class="bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg transition-colors">
+              选择文件
+            </button>
+            <input type="file" class="hidden" accept=".xlsx,.xls,.csv">
+          </div>
+          
+          <div class="mt-4 hidden file-preview">
+            <div class="flex items-center justify-between p-3 bg-neutral-100 rounded-lg">
+              <div class="flex items-center">
+                <i class="fa fa-file-excel-o text-success mr-2"></i>
+                <span class="text-sm font-medium filename">股东信息表.xlsx</span>
+              </div>
+              <button class="text-neutral-500 hover:text-danger transition-colors">
+                <i class="fa fa-times"></i>
+              </button>
+            </div>
+            
+            <!-- 数据预览区域 -->
+            <div class="mt-4 border border-neutral-200 rounded-lg overflow-hidden">
+              <div class="bg-neutral-50 p-3 border-b border-neutral-200 flex justify-between items-center">
+                <h4 class="font-medium text-sm text-neutral-700">数据预览 (前5行)</h4>
+                <span class="text-xs text-neutral-500 total-records">共 0 条记录</span>
+              </div>
+              <div class="overflow-x-auto data-preview-container max-h-60"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 导入表格5：高管信息表 -->
+      <div class="bg-white rounded-xl shadow-sm mb-8 overflow-hidden">
+        <div class="p-4 border-b border-neutral-200 flex justify-between items-center cursor-pointer import-header" data-target="table5-content">
+          <div class="flex items-center">
+            <span class="inline-flex items-center justify-center w-6 h-6 bg-primary text-white rounded-full text-sm mr-2">5</span>
+            <h3 class="font-medium">高管信息表</h3>
+          </div>
+          <i class="fa fa-chevron-down text-neutral-500 transition-transform duration-300"></i>
+        </div>
+        
+        <div id="table5-content" class="p-4 max-h-[700px] overflow-y-auto transition-height hidden">
+          <div class="mb-4">
+            <p class="text-sm text-neutral-600 mb-2">
+              <i class="fa fa-info-circle text-primary mr-1"></i>
+              数据字段：企业名称、高管名、高管职务、开始时间、结束时间
+            </p>
+            <p class="text-sm text-neutral-500 italic">
+              提示：该数据表可从数智化审计平台下载
+            </p>
+			<button class="text-sm text-primary hover:underline" onclick="downloadTemplate(5)">
+				<i class="fa fa-download mr-1"></i>下载模板
+			</button>			
+          </div>
+          
+          <div class="border-2 border-dashed border-neutral-300 rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer file-drop-area" data-table="5">
+            <i class="fa fa-file-excel-o text-4xl text-neutral-400 mb-3"></i>
+            <p class="mb-2 text-neutral-600">拖放Excel文件到此处，或</p>
+            <button class="bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg transition-colors">
+              选择文件
+            </button>
+            <input type="file" class="hidden" accept=".xlsx,.xls,.csv">
+          </div>
+          
+          <div class="mt-4 hidden file-preview">
+            <div class="flex items-center justify-between p-3 bg-neutral-100 rounded-lg">
+              <div class="flex items-center">
+                <i class="fa fa-file-excel-o text-success mr-2"></i>
+                <span class="text-sm font-medium filename">高管信息表.xlsx</span>
+              </div>
+              <button class="text-neutral-500 hover:text-danger transition-colors">
+                <i class="fa fa-times"></i>
+              </button>
+            </div>
+            
+            <!-- 数据预览区域 -->
+            <div class="mt-4 border border-neutral-200 rounded-lg overflow-hidden">
+              <div class="bg-neutral-50 p-3 border-b border-neutral-200 flex justify-between items-center">
+                <h4 class="font-medium text-sm text-neutral-700">数据预览 (前5行)</h4>
+                <span class="text-xs text-neutral-500 total-records">共 0 条记录</span>
+              </div>
+              <div class="overflow-x-auto data-preview-container max-h-60"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 分析按钮 -->
+      <div class="text-center mb-8">
+        <button id="analyze-btn" class="bg-primary hover:bg-secondary text-white px-8 py-3 rounded-lg text-lg font-medium transition-all transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100" disabled>
+          <i class="fa fa-line-chart mr-2"></i>开始分析
+        </button>
+      </div>
+    </section>
+    
+    <!-- 分析结果区域 -->
+    <section id="results-section" class="hidden">
+<!-- 修改开始 -->
+<h2 class="text-xl font-semibold mb-6 text-neutral-800 flex items-center justify-between">
+  <span class="flex items-center">
+    <i class="fa fa-search text-primary mr-2"></i>分析结果
+  </span>
+  <div class="flex gap-3">
+  <button id="reimport-btn" class="bg-neutral-500 hover:bg-neutral-600 text-white px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center">
+    <i class="fa fa-refresh mr-2 text-sm"></i>重新导入数据
+  </button>
+  <button id="export-results" class="bg-primary hover:bg-secondary text-white px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center">
+    <i class="fa fa-download mr-2 text-sm"></i>导出结果
+  </button>
+</div>
+</h2>
+<!-- 修改结束 -->
+	
+      <!-- 结果概览 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-xl shadow-sm p-5 transform hover:shadow-md transition-shadow">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-neutral-600 font-medium">线索涉及项目个数</h3>
+            <i class="fa fa-folder-open text-primary text-xl"></i>
+          </div>
+          <p class="text-3xl font-bold text-neutral-800" id="total-projects">0</p>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-sm p-5 transform hover:shadow-md transition-shadow">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-neutral-600 font-medium">人员交叉线索个数</h3>
+            <i class="fa fa-users text-warning text-xl"></i>
+          </div>
+          <p class="text-3xl font-bold text-neutral-800" id="person-clues">0</p>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-sm p-5 transform hover:shadow-md transition-shadow">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-neutral-600 font-medium">联系方式交叉线索个数</h3>
+            <i class="fa fa-phone text-danger text-xl"></i>
+          </div>
+          <p class="text-3xl font-bold text-neutral-800" id="contact-clues">0</p>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-sm p-5 transform hover:shadow-md transition-shadow">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-neutral-600 font-medium">地址交叉线索个数</h3>
+            <i class="fa fa-map-marker text-success text-xl"></i>
+          </div>
+          <p class="text-3xl font-bold text-neutral-800" id="address-clues">0</p>
+        </div>
+      </div>
+      
+      <!-- 筛选 -->
+<div class="bg-white rounded-xl shadow-sm p-4 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+  <div class="flex flex-wrap gap-3">
+    <div class="relative">
+      <select id="type-filter" class="appearance-none bg-neutral-100 border border-neutral-300 rounded-lg py-2 pl-3 pr-8 focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm">
+        <option value="all">所有类型</option>
+        <option value="人员">人员交叉</option>
+        <option value="电话">电话交叉</option>
+        <option value="邮箱">邮箱交叉</option>
+        <option value="地址">地址交叉</option>
+      </select>
+      <i class="fa fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none"></i>
+    </div>
+    
+    <div class="relative">
+      <input type="text" id="project-filter" placeholder="搜索项目编号/名称" class="bg-neutral-100 border border-neutral-300 rounded-lg py-2 pl-3 pr-8 focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm w-full sm:w-64">
+      <i class="fa fa-search absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500"></i>
+    </div>
+  </div>
+</div>
+      
+      <!-- 结果表格 -->
+      <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full" id="results-table">
+            <thead class="bg-neutral-100 sticky top-0 z-10">
+              <tr>
+                <th class="py-3 px-4 text-left text-sm font-semibold text-neutral-700 border-b">采办-标段编号</th>
+                <th class="py-3 px-4 text-left text-sm font-semibold text-neutral-700 border-b">采办标段名称</th>
+                <th class="py-3 px-4 text-left text-sm font-semibold text-neutral-700 border-b">类型</th>
+                <th class="py-3 px-4 text-left text-sm font-semibold text-neutral-700 border-b">相同信息</th>
+                <th class="py-3 px-4 text-left text-sm font-semibold text-neutral-700 border-b">情况描述</th>
+              </tr>
+            </thead>
+            <tbody id="results-body">
+              <!-- 结果将通过JS动态填充 -->
+              <tr>
+                <td colspan="5" class="py-8 text-center text-neutral-500">暂无分析结果，请先导入数据并进行分析</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <!-- 分页 -->
+        <div class="p-4 border-t border-neutral-200 flex justify-between items-center" id="pagination" style="display: none;">
+          <div class="text-sm text-neutral-600">
+            显示 1 至 <span id="showing-count">0</span>，共 <span id="total-count">0</span> 条记录
+          </div>
+          <div class="flex space-x-1">
+            <button id="prev-page" class="w-8 h-8 flex items-center justify-center rounded border border-neutral-300 text-neutral-600 hover:bg-neutral-100 disabled:opacity-50" disabled>
+              <i class="fa fa-chevron-left text-xs"></i>
+            </button>
+            <button id="next-page" class="w-8 h-8 flex items-center justify-center rounded border border-neutral-300 text-neutral-600 hover:bg-neutral-100 disabled:opacity-50" disabled>
+              <i class="fa fa-chevron-right text-xs"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+    <!-- 分析中加载动画 -->
+    <section id="loading-section" class="hidden">
+      <div class="bg-white rounded-xl shadow-sm p-8 text-center">
+        <div class="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mb-4"></div>
+        <h3 class="text-lg font-medium text-neutral-800 mb-2">正在进行数据分析</h3>
+        <p class="text-neutral-600" id="analysis-status">准备分析数据...</p>
+        <div class="mt-6 w-full bg-neutral-200 rounded-full h-2">
+          <div class="bg-primary h-2 rounded-full" id="progress-bar" style="width: 0%"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 页脚 -->
+  <footer class="bg-white border-t border-neutral-200 py-6 mt-10">
+    <div class="container mx-auto px-4 text-center text-neutral-600 text-sm">
+      <p>© 2025 采办项目疑似串通投标分析模型</p>
+      <p class="mt-1">Power by wangxch57</p>
+    </div>
+  </footer>
+
+  <!-- 通知提示 -->
+  <div id="notification" class="fixed bottom-6 right-6 bg-white shadow-lg rounded-lg p-4 transform translate-y-20 opacity-0 transition-all duration-300 max-w-md z-50 hidden">
+    <div class="flex items-start">
+      <i id="notification-icon" class="fa fa-check-circle text-success text-xl mt-0.5 mr-3"></i>
+      <div>
+        <h4 id="notification-title" class="font-medium text-neutral-800">操作成功</h4>
+        <p id="notification-message" class="text-sm text-neutral-600 mt-1">文件已成功上传</p>
+      </div>
+      <button id="close-notification" class="ml-auto text-neutral-400 hover:text-neutral-600">
+        <i class="fa fa-times"></i>
+      </button>
+    </div>
+  </div>
+
+  <script>
+	// 下载模板功能
+function downloadTemplate(tableNum) {
+  let headers = [];
+  let filename = '';
+
+  switch(tableNum) {
+    case 1:
+      headers = ['采办-标段编号', '采办-标段名称', '投标供应商'];
+      filename = '投标供应商清单模板.xlsx';
+      break;
+    case 2:
+      headers = [
+        '原文件导入名称', '系统匹配企业名称', '登记状态', '统一社会信用代码', '法定代表人',
+        '成立日期', '核准日期', '注册资本', '实缴资本', '电话', '更多电话', '所属省份',
+        '所属城市', '所属区县', '企业地址', '通信地址', '邮箱', '更多邮箱', '登记机关',
+        '企业(机构)类型', '纳税人资质', '纳税人识别号', '注册号', '组织机构代码',
+        '营业期限', '国标行业门类', '国标行业大类', '国标行业中类', '国标行业小类',
+        '曾用名', '英文名', '企业规模', '经营范围', '企业简介', '官网', '最新年报年份',
+        '最新年报营业收入', '参保人数', '参保人数所属年报', '天眼评分', '科创分', '科创等级'
+      ];
+      filename = '供应商基本信息表模板.xlsx';
+      break;
+    case 3:
+      headers = ['企业名称', '实控人', '股份', '开始时间', '结束时间'];
+      filename = '实控人信息表模板.xlsx';
+      break;
+    case 4:
+      headers = ['企业名称', '股东名', '股份', '开始时间', '结束时间'];
+      filename = '股东信息表模板.xlsx';
+      break;
+    case 5:
+      headers = ['企业名称', '高管名', '高管职务', '开始时间', '结束时间'];
+      filename = '高管信息表模板.xlsx';
+      break;
+    default:
+      showNotification('error', '未知模板', '无法识别的模板类型');
+      return;
+  }
+
+  // 创建 Excel 文件
+  const ws = XLSX.utils.aoa_to_sheet([headers]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '模板');
+
+  // 下载文件
+  XLSX.writeFile(wb, filename);
+  showNotification('success', '模板下载成功', `已下载：${filename}`);
+}
+    // 存储导入的数据
+    const importedData = {
+      table1: null, // 投标供应商清单
+      table2: null, // 供应商基本信息表
+      table3: null, // 实控人信息表
+      table4: null, // 股东信息表
+      table5: null  // 高管信息表
+    };
+    
+    // 分析结果数据
+    let analysisResults = [];
+
+    // 监听页面加载完成
+    document.addEventListener('DOMContentLoaded', function() {
+      // 导入区域展开/折叠功能
+      const importHeaders = document.querySelectorAll('.import-header');
+      importHeaders.forEach(header => {
+        header.addEventListener('click', function() {
+          const targetId = this.getAttribute('data-target');
+          const targetContent = document.getElementById(targetId);
+          const icon = this.querySelector('i');
+          
+          if (targetContent.classList.contains('hidden')) {
+            targetContent.classList.remove('hidden');
+            icon.classList.add('rotate-180');
+          } else {
+            targetContent.classList.add('hidden');
+            icon.classList.remove('rotate-180');
+          }
+        });
+      });
+      
+      // 默认展开第一个表格的导入区域
+      document.querySelector('.import-header').click();
+      
+      // 文件上传功能
+      const fileDropAreas = document.querySelectorAll('.file-drop-area');
+      const fileInputs = document.querySelectorAll('.file-drop-area input[type="file"]');
+      const fileButtons = document.querySelectorAll('.file-drop-area button');
+      const removeButtons = document.querySelectorAll('.file-preview button');
+      const analyzeBtn = document.getElementById('analyze-btn');
+      
+      // 点击按钮触发文件选择
+      fileButtons.forEach((button, index) => {
+        button.addEventListener('click', function(e) {
+          e.preventDefault();
+          fileInputs[index].click();
+        });
+      });
+      
+      // 文件选择后处理
+      fileInputs.forEach((input, index) => {
+        input.addEventListener('change', function(e) {
+          handleFileUpload(e, index + 1); // 表格编号从1开始
+        });
+      });
+      
+      // 拖放功能
+      fileDropAreas.forEach((area, index) => {
+        area.addEventListener('dragover', function(e) {
+          e.preventDefault();
+          this.classList.add('border-primary');
+        });
+        
+        area.addEventListener('dragleave', function() {
+          this.classList.remove('border-primary');
+        });
+        
+        area.addEventListener('drop', function(e) {
+          e.preventDefault();
+          this.classList.remove('border-primary');
+          handleFileUpload(e, index + 1); // 表格编号从1开始
+        });
+      });
+      
+      // 移除已上传文件
+      removeButtons.forEach((button, index) => {
+        button.addEventListener('click', function() {
+          const tableNum = index + 1;
+          const preview = this.closest('.file-preview');
+          const dropArea = preview.previousElementSibling;
+          const fileName = preview.querySelector('.filename').textContent;
+          
+          // 清除存储的数据
+          importedData[`table${tableNum}`] = null;
+          
+          preview.classList.add('hidden');
+          dropArea.classList.remove('hidden');
+          
+          showNotification('info', '文件已移除', `已移除文件：${fileName}`);
+          
+          // 检查是否所有文件都已上传
+          checkAllFilesUploaded();
+        });
+      });
+      
+      // 分析按钮点击事件
+      analyzeBtn.addEventListener('click', function() {
+	  // 新增：立即折叠系统介绍
+		collapseIntro();
+        // 显示加载界面
+        document.querySelector('section').classList.add('hidden');
+        document.getElementById('loading-section').classList.remove('hidden');
+        document.getElementById('results-section').classList.add('hidden');
+        
+        // 执行分析
+        performAnalysis();
+      });
+      
+      // 筛选功能
+      const typeFilter = document.getElementById('type-filter');
+      const projectFilter = document.getElementById('project-filter');
+      
+      typeFilter.addEventListener('change', filterResults);
+      projectFilter.addEventListener('input', filterResults);
+      
+      // 导出结果
+      document.getElementById('export-results').addEventListener('click', exportResults);
+      
+      // 关闭通知
+      document.getElementById('close-notification').addEventListener('click', hideNotification);
+      
+      // 滚动时导航栏效果
+      window.addEventListener('scroll', function() {
+        const header = document.querySelector('header');
+        if (window.scrollY > 10) {
+          header.classList.add('py-2');
+          header.classList.remove('py-3');
+        } else {
+          header.classList.add('py-3');
+          header.classList.remove('py-2');
+        }
+      });
+    });
+    
+    // 处理文件上传
+    function handleFileUpload(e, tableNum) {
+      const file = e.dataTransfer ? e.dataTransfer.files[0] : e.target.files[0];
+      if (!file) return;
+      
+      // 验证文件类型
+      const fileExt = file.name.split('.').pop().toLowerCase();
+      if (!['xlsx', 'xls', 'csv'].includes(fileExt)) {
+        showNotification('error', '文件格式错误', '请上传Excel或CSV格式的文件');
+        return;
+      }
+      
+      const reader = new FileReader();
+      
+      reader.onload = function(e) {
+        try {
+          // 解析Excel文件
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          /* 1. 先把日期数字转成 Date 对象 */
+const worksheet = workbook.Sheets[firstSheetName];
+if (!worksheet['!ref']) {                       // 保险：防止空表
+  throw new Error('工作表为空');
+}
+const range = XLSX.utils.decode_range(worksheet['!ref']);
+for (let R = range.s.r; R <= range.e.r; R++) {
+  for (let C = range.s.c; C <= range.e.c; C++) {
+    const cell = worksheet[XLSX.utils.encode_cell({ r: R, c: C })];
+    if (cell && cell.t === 'n' && cell.v && cell.v > 40000) { // 粗略判断可能是日期
+      cell.t = 'd';             // 标记成日期
+      cell.v = new Date((cell.v - 25569) * 86400 * 1000); // 1900 基准转 Date
+    }
+  }
+}
+
+/* 2. 再转 JSON */
+let jsonData;
+let originalJsonData;
+          
+          if (tableNum === 2) {
+            // 先获取完整数据用于预览
+            originalJsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            
+            // 获取工作表范围
+            const range = XLSX.utils.decode_range(worksheet['!ref']);
+            // 从第二行开始（索引从1开始）
+            range.s.r = 1;
+            worksheet['!ref'] = XLSX.utils.encode_range(range);
+            jsonData = XLSX.utils.sheet_to_json(worksheet);
+          } else {
+            // 对于其他表格，直接获取数据
+            originalJsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            jsonData = XLSX.utils.sheet_to_json(worksheet);
+          }
+          
+          // 执行详细的数据结构验证
+          const validationResult = validateDataStructure(jsonData, tableNum);
+          if (!validationResult.valid) {
+            showNotification('error', '数据结构验证失败', validationResult.message);
+            return;
+          }
+          
+          // 验证数据是否为空
+          if (jsonData.length === 0) {
+            showNotification('warning', '数据为空', `文件 ${file.name} 中未发现有效数据`);
+            return;
+          }
+          
+          // 存储解析后的数据
+          importedData[`table${tableNum}`] = jsonData;
+          
+          // 更新UI
+          const dropArea = document.querySelector(`.file-drop-area[data-table="${tableNum}"]`);
+          const preview = dropArea.nextElementSibling;
+          const fileNameElement = preview.querySelector('.filename');
+          const totalRecordsElement = preview.querySelector('.total-records');
+          const previewContainer = preview.querySelector('.data-preview-container');
+          
+          fileNameElement.textContent = file.name;
+          totalRecordsElement.textContent = `共 ${jsonData.length} 条记录`;
+          
+          // 生成数据预览表格
+          generateDataPreview(originalJsonData, previewContainer, tableNum);
+          
+          preview.classList.remove('hidden');
+          dropArea.classList.add('hidden');
+          
+          showNotification('success', '文件上传成功', 
+            `已成功上传：${file.name}，共 ${jsonData.length} 条记录`);
+          
+          // 检查是否所有文件都已上传
+          checkAllFilesUploaded();
+        } catch (error) {
+          console.error('文件解析错误:', error);
+          showNotification('error', '文件解析失败', '无法解析该文件，请检查文件格式是否正确');
+        }
+      };
+      
+      reader.onerror = function() {
+        showNotification('error', '文件读取失败', '无法读取该文件，请重试');
+      };
+      
+      if (fileExt === 'csv') {
+        reader.readAsText(file);
+      } else {
+        reader.readAsArrayBuffer(file);
+      }
+    }
+    
+    // 数据结构验证函数
+    function validateDataStructure(data, tableNum) {
+      // 检查数据是否为空
+      if (!data || data.length === 0) {
+        return { valid: false, message: '数据为空，未发现任何记录' };
+      }
+      
+      // 检查第一条记录是否包含必要字段
+      const firstRecord = data[0];
+      if (!firstRecord || typeof firstRecord !== 'object') {
+        return { valid: false, message: '数据格式错误，无法识别记录结构' };
+      }
+      
+      // 根据不同表格类型验证必要字段
+      let requiredFields = [];
+      let tableName = '';
+      
+      switch(tableNum) {
+        case 1:
+          tableName = '采办项目投标供应商清单';
+          requiredFields = ['采办-标段编号', '采办-标段名称', '投标供应商'];
+          break;
+        case 2:
+          tableName = '供应商基本信息表';
+          requiredFields = ['原文件导入名称', '法定代表人', '电话', '邮箱', '企业地址'];
+          break;
+        case 3:
+          tableName = '实控人信息表';
+          requiredFields = ['企业名称', '实控人'];
+          break;
+        case 4:
+          tableName = '股东信息表';
+          requiredFields = ['企业名称', '股东名'];
+          break;
+        case 5:
+          tableName = '高管信息表';
+          requiredFields = ['企业名称', '高管名', '高管职务'];
+          break;
+        default:
+          return { valid: false, message: '未知的表格类型' };
+      }
+      
+      // 检查必要字段是否存在
+      const missingFields = requiredFields.filter(field => !firstRecord.hasOwnProperty(field));
+      
+      if (missingFields.length > 0) {
+        return { 
+          valid: false, 
+          message: `${tableName} 缺少必要字段：${missingFields.join('、')}，请检查数据结构是否正确` 
+        };
+      }
+      
+      // 对特定表格进行额外验证
+      if (tableNum === 1) {
+        // 检查是否有重复的标段编号和供应商组合
+        const uniqueCombinations = new Set();
+        for (let i = 0; i < data.length; i++) {
+          const record = data[i];
+          const key = `${record['采办-标段编号']}-${record['投标供应商']}`;
+          if (uniqueCombinations.has(key)) {
+            return {
+              valid: false,
+              message: `采办项目投标供应商清单中存在重复记录：标段 ${record['采办-标段编号']} 的供应商 ${record['投标供应商']} 出现多次`
+            };
+          }
+          uniqueCombinations.add(key);
+        }
+      }
+      
+      if (tableNum === 2) {
+        // 检查是否有重复的供应商名称
+        const supplierNames = new Set();
+        for (let i = 0; i < data.length; i++) {
+          const record = data[i];
+          const name = record['原文件导入名称'];
+          if (supplierNames.has(name)) {
+            return {
+              valid: false,
+              message: `供应商基本信息表中存在重复的供应商：${name} 出现多次`
+            };
+          }
+          if (name) supplierNames.add(name);
+        }
+      }
+      
+      return { valid: true, message: '数据结构验证通过' };
+    }
+    
+    // 生成数据预览表格
+    function generateDataPreview(originalData, container, tableNum) {
+      // originalData 是包含表头的原始数据（数组形式）
+      if (!originalData || originalData.length === 0) {
+        container.innerHTML = '<div class="p-4 text-center text-neutral-500">无数据可预览</div>';
+        return;
+      }
+      
+      // 提取表头和数据行
+      let headers, rows;
+
+if (tableNum === 2) {
+  // ✅ 修改：第二行作为表头，第一行跳过
+  if (originalData.length < 2) {
+    container.innerHTML = '<div class="p-4 text-center text-neutral-500">数据不足，无法预览</div>';
+    return;
+  }
+  headers = originalData[1]; // ✅ 第二行作为表头
+  rows = originalData.slice(2); // ✅ 从第三行开始是数据
+} else {
+  headers = originalData[0]; // 第一行是表头
+  rows = originalData.slice(1); // 其余是数据
+}
+      
+      // 限制预览的列数（最多显示6列）
+      const maxColumns = 6;
+      const displayHeaders = headers.slice(0, maxColumns);
+      if (headers.length > maxColumns) {
+        displayHeaders.push(`...(${headers.length - maxColumns}列)`);
+      }
+      
+      // 限制预览的行数（最多显示5行）
+      const previewRows = rows.slice(0, 5);   // 最多 5 行
+      
+      // 创建预览表格
+      let tableHtml = '<table class="min-w-full divide-y divide-neutral-200 text-xs">';
+      
+      // 表头
+      tableHtml += '<thead><tr class="bg-neutral-50">';
+      displayHeaders.forEach(header => {
+        tableHtml += `<th class="px-3 py-2 text-left font-medium text-neutral-700 whitespace-nowrap">${header || '未命名列'}</th>`;
+      });
+      tableHtml += '</tr></thead>';
+      
+      // 表体
+      tableHtml += '<tbody class="bg-white divide-y divide-neutral-200">';
+      
+      if (previewRows.length === 0) {
+  tableHtml += `<tr><td colspan="${displayHeaders.length}" class="px-3 py-4 text-center text-neutral-500">无数据</td></tr>`;
+} else {
+  previewRows.forEach(row => {
+          tableHtml += '<tr class="hover:bg-neutral-50">';
+          // 只显示前maxColumns列
+          for (let i = 0; i < maxColumns; i++) {
+            const cellValue = row[i] !== undefined ? row[i] : '';
+            let displayValue;
+if (cellValue instanceof Date && !isNaN(cellValue)) {
+  displayValue = cellValue.toISOString().slice(0,10);   // yyyy-mm-dd
+} else {
+  displayValue = String(cellValue);
+}
+if (displayValue.length > 50) displayValue = displayValue.slice(0,50)+'…';
+            tableHtml += `<td class="px-3 py-1 text-neutral-800 whitespace-nowrap">${displayValue}</td>`;
+          }
+          // 如果有更多列，显示省略标记
+          if (row.length > maxColumns) {
+            tableHtml += `<td class="px-3 py-2 text-neutral-500">...</td>`;
+          }
+          tableHtml += '</tr>';
+        });
+      }
+      
+      tableHtml += '</tbody></table>';
+      
+      container.innerHTML = tableHtml;
+    }
+    
+    // 检查是否所有文件都已上传
+    function checkAllFilesUploaded() {
+      const allUploaded = Object.values(importedData).every(data => data !== null && data.length > 0);
+      const analyzeBtn = document.getElementById('analyze-btn');
+      
+      if (allUploaded) {
+        analyzeBtn.removeAttribute('disabled');
+      } else {
+        analyzeBtn.setAttribute('disabled', 'true');
+      }
+    }
+    
+    // 执行数据分析
+    function performAnalysis() {
+      // 重置分析结果
+      analysisResults = [];
+      
+      // 分步分析，更新进度条
+      const progressSteps = 10;
+      let currentProgress = 0;
+      const progressBar = document.getElementById('progress-bar');
+      const statusText = document.getElementById('analysis-status');
+      
+      const updateProgress = (step, status) => {
+        currentProgress = (step / progressSteps) * 100;
+        progressBar.style.width = `${currentProgress}%`;
+        statusText.textContent = status;
+      };
+      
+      try {
+        // 步骤1: 准备数据结构
+        setTimeout(() => {
+          updateProgress(1, '正在准备数据结构...');
+          
+          // 验证投标供应商清单数据
+          if (!importedData.table1 || importedData.table1.length === 0) {
+            throw new Error('投标供应商清单数据为空');
+          }
+          
+          // 按项目分组投标供应商
+          const projects = {};
+          importedData.table1.forEach(item => {
+            // 验证必要字段
+            if (!item['采办-标段编号'] || !item['采办-标段名称'] || !item['投标供应商']) {
+              throw new Error(`投标供应商清单中存在不完整数据: ${JSON.stringify(item)}`);
+            }
+            
+            const projectKey = `${item['采办-标段编号']}-${item['采办-标段名称']}`;
+            if (!projects[projectKey]) {
+              projects[projectKey] = {
+                id: item['采办-标段编号'],
+                name: item['采办-标段名称'],
+                suppliers: new Set()
+              };
+            }
+            projects[projectKey].suppliers.add(item['投标供应商']);
+          });
+          
+          // 转换为数组并去重
+          const projectList = Object.values(projects).map(project => ({
+            ...project,
+            suppliers: Array.from(project.suppliers)
+          }));
+          
+          if (projectList.length === 0) {
+            throw new Error('未找到有效的项目数据');
+          }
+          
+          updateProgress(2, '数据结构准备完成，开始分析人员交叉...');
+          
+          // 步骤2: 分析人员交叉
+          setTimeout(() => {
+            try {
+              analyzePersonCross(projectList);
+              updateProgress(5, '人员交叉分析完成，开始分析联系方式交叉...');
+              
+              // 步骤3: 分析联系方式和地址交叉
+              setTimeout(() => {
+                try {
+                  analyzeContactCross(projectList);
+                  updateProgress(8, '联系方式交叉分析完成，正在整理结果...');
+                  
+                  // 步骤4: 整理结果并显示
+                  setTimeout(() => {
+                    updateProgress(10, '分析完成，正在显示结果...');
+                    
+                    // 显示结果
+                    setTimeout(() => {
+                      displayResults();
+                      document.getElementById('loading-section').classList.add('hidden');
+                      document.getElementById('results-section').classList.remove('hidden');
+                    }, 500);
+                  }, 500);
+                } catch (error) {
+                  handleAnalysisError(error);
+                }
+              }, 1000);
+            } catch (error) {
+              handleAnalysisError(error);
+            }
+          }, 1000);
+        }, 500);
+      } catch (error) {
+        handleAnalysisError(error);
+      }
+    }
+    
+    // 处理分析过程中的错误
+    function handleAnalysisError(error) {
+      console.error('分析过程出错:', error);
+      showNotification('error', '分析失败', `数据分析过程中出现错误: ${error.message}`);
+      document.getElementById('loading-section').classList.add('hidden');
+      document.querySelector('section').classList.remove('hidden');
+    }
+    
+    // 分析人员交叉
+    function analyzePersonCross(projectList) {
+      // 验证必要数据
+      if (!importedData.table2 || importedData.table2.length === 0) {
+        throw new Error('供应商基本信息表数据为空');
+      }
+      if (!importedData.table3 || importedData.table3.length === 0) {
+        throw new Error('实控人信息表数据为空');
+      }
+      if (!importedData.table4 || importedData.table4.length === 0) {
+        throw new Error('股东信息表数据为空');
+      }
+      if (!importedData.table5 || importedData.table5.length === 0) {
+        throw new Error('高管信息表数据为空');
+      }
+      
+      // 为每个供应商建立人员索引
+      const supplierPersons = {};
+      
+      // 处理法定代表人
+      importedData.table2.forEach(company => {
+        const supplierName = company['原文件导入名称'];
+        if (!supplierName) return;
+        
+        if (!supplierPersons[supplierName]) {
+          supplierPersons[supplierName] = [];
+        }
+        
+        if (company['法定代表人']) {
+          supplierPersons[supplierName].push({
+            name: company['法定代表人'],
+            type: '法定代表人',
+            details: ''
+          });
+        }
+      });
+      
+      // 处理实控人
+      importedData.table3.forEach(record => {
+        const supplierName = record['企业名称'];
+        if (!supplierName) return;
+        
+        if (!supplierPersons[supplierName]) {
+          supplierPersons[supplierName] = [];
+        }
+        
+        if (record['实控人']) {
+          supplierPersons[supplierName].push({
+            name: record['实控人'],
+            type: '实控人',
+            details: `股份：${record['股份'] || '未知'}`
+          });
+        }
+      });
+      
+      // 处理股东
+      importedData.table4.forEach(record => {
+        const supplierName = record['企业名称'];
+        if (!supplierName) return;
+        
+        if (!supplierPersons[supplierName]) {
+          supplierPersons[supplierName] = [];
+        }
+        
+        if (record['股东名']) {
+          supplierPersons[supplierName].push({
+            name: record['股东名'],
+            type: '股东',
+            details: `股份：${record['股份'] || '未知'}`
+          });
+        }
+      });
+      
+      // 处理高管
+      importedData.table5.forEach(record => {
+        const supplierName = record['企业名称'];
+        if (!supplierName) return;
+        
+        if (!supplierPersons[supplierName]) {
+          supplierPersons[supplierName] = [];
+        }
+        
+        if (record['高管名']) {
+          supplierPersons[supplierName].push({
+            name: record['高管名'],
+            type: '高管',
+            details: `职务：${record['高管职务'] || '未知'}`
+          });
+        }
+      });
+      
+      // 检查每个项目的供应商之间的人员交叉
+      projectList.forEach(project => {
+        const { id, name, suppliers } = project;
+        const supplierList = Array.from(suppliers);
+        
+        // 限制单次循环的供应商数量，防止大数据量时卡住
+        if (supplierList.length > 50) {
+          showNotification('warning', '供应商数量过多', 
+            `项目 ${name} 包含超过50个供应商，可能影响分析速度`);
+        }
+        
+        // 检查所有供应商对
+        for (let i = 0; i < supplierList.length; i++) {
+          const supplierA = supplierList[i];
+          const personsA = supplierPersons[supplierA] || [];
+          
+          // 每处理10个供应商对，短暂释放线程
+          if (i % 10 === 0) {
+            // 这是一个技巧，允许UI更新
+            void Promise.resolve();
+          }
+          
+          for (let j = i + 1; j < supplierList.length; j++) {
+            const supplierB = supplierList[j];
+            const personsB = supplierPersons[supplierB] || [];
+            
+            // 查找共同人员
+            personsA.forEach(personA => {
+              const matchingPerson = personsB.find(personB => 
+                personB.name && personA.name && 
+                personB.name.trim().toLowerCase() === personA.name.trim().toLowerCase()
+              );
+              
+              if (matchingPerson) {
+                // 记录线索，避免重复
+                const clueKey = `${id}-${supplierA}-${supplierB}-${personA.name}`;
+                if (!analysisResults.some(r => r.clueKey === clueKey)) {
+                  analysisResults.push({
+                    clueKey,
+                    projectId: id,
+                    projectName: name,
+                    type: '人员',
+                    sameInfo: personA.name,
+                    description: `【${supplierA}】与【${supplierB}】存在相同的人员：${personA.name}。-${personA.name}在【${supplierA}】担任：${personA.type}${personA.details ? '（' + personA.details + '）' : ''}，在【${supplierB}】担任：${matchingPerson.type}${matchingPerson.details ? '（' + matchingPerson.details + '）' : ''}`
+                  });
+                }
+              }
+            });
+          }
+        }
+      });
+    }
+    
+    // 分析联系方式和地址交叉
+// 分析联系方式和地址交叉
+function analyzeContactCross(projectList) {
+  // 为每个供应商建立联系信息索引
+  const supplierContacts = {};
+
+  importedData.table2.forEach(company => {
+    const supplierName = company['原文件导入名称'];
+    if (!supplierName) return;
+
+    if (!supplierContacts[supplierName]) {
+      supplierContacts[supplierName] = {
+        phones: [],
+        emails: [],
+        addresses: []
+      };
+    }
+
+    // 处理电话（支持格式：0531-66563421 或 13812345678）
+    const phoneStr = String(company['电话'] || '').trim();
+    if (phoneStr) supplierContacts[supplierName].phones.push(phoneStr);
+
+    if (company['更多电话']) {
+      const morePhoneStr = String(company['更多电话']);
+      const morePhones = morePhoneStr.split(/[\s,;]+/).filter(phone => phone.trim());
+      supplierContacts[supplierName].phones.push(...morePhones);
+    }
+
+    // 处理邮箱
+    const emailStr = String(company['邮箱'] || '').trim().toLowerCase();
+    if (emailStr) supplierContacts[supplierName].emails.push(emailStr);
+
+    if (company['更多邮箱']) {
+      const moreEmailStr = String(company['更多邮箱']);
+      const moreEmails = moreEmailStr.split(/[\s,;]+/).filter(email => email.trim());
+      supplierContacts[supplierName].emails.push(...moreEmails.map(e => e.toLowerCase()));
+    }
+
+    // 处理地址
+    const addressStr = String(company['企业地址'] || '').trim();
+    if (addressStr) supplierContacts[supplierName].addresses.push(addressStr);
+
+    const commAddressStr = String(company['通信地址'] || '').trim();
+    if (commAddressStr) supplierContacts[supplierName].addresses.push(commAddressStr);
+  });
+
+  // 检查每个项目的供应商之间的联系信息交叉
+  projectList.forEach(project => {
+    const { id, name, suppliers } = project;
+    const supplierList = Array.from(suppliers);
+
+    for (let i = 0; i < supplierList.length; i++) {
+      const supplierA = supplierList[i];
+      const contactsA = supplierContacts[supplierA] || { phones: [], emails: [], addresses: [] };
+
+      if (i % 10 === 0) {
+        void Promise.resolve();
+      }
+
+      for (let j = i + 1; j < supplierList.length; j++) {
+        const supplierB = supplierList[j];
+        const contactsB = supplierContacts[supplierB] || { phones: [], emails: [], addresses: [] };
+
+        // 检查电话交叉
+        contactsA.phones.forEach(phoneA => {
+          if (phoneA && contactsB.phones.some(phoneB => phoneB && phoneB === phoneA)) {
+            const clueKey = `${id}-${supplierA}-${supplierB}-phone-${phoneA}`;
+            if (!analysisResults.some(r => r.clueKey === clueKey)) {
+              analysisResults.push({
+                clueKey,
+                projectId: id,
+                projectName: name,
+                type: '电话',
+                sameInfo: phoneA,
+                description: `【${supplierA}】与【${supplierB}】存在相同的电话：${phoneA}`
+              });
+            }
+          }
+        });
+
+        // 检查邮箱交叉
+        contactsA.emails.forEach(emailA => {
+          if (emailA && contactsB.emails.some(emailB => emailB && emailB === emailA)) {
+            const clueKey = `${id}-${supplierA}-${supplierB}-email-${emailA}`;
+            if (!analysisResults.some(r => r.clueKey === clueKey)) {
+              analysisResults.push({
+                clueKey,
+                projectId: id,
+                projectName: name,
+                type: '邮箱',
+                sameInfo: emailA,
+                description: `【${supplierA}】与【${supplierB}】存在相同的邮箱：${emailA}`
+              });
+            }
+          }
+        });
+
+        // 检查地址交叉
+        contactsA.addresses.forEach(addressA => {
+          if (addressA && contactsB.addresses.some(addressB => addressB && addressB === addressA)) {
+            const clueKey = `${id}-${supplierA}-${supplierB}-address-${addressA}`;
+            if (!analysisResults.some(r => r.clueKey === clueKey)) {
+              analysisResults.push({
+                clueKey,
+                projectId: id,
+                projectName: name,
+                type: '地址',
+                sameInfo: addressA,
+                description: `【${supplierA}】与【${supplierB}】存在相同的地址：${addressA}`
+              });
+            }
+          }
+        });
+      }
+    }
+  });
+}
+    
+    // 显示分析结果
+    function displayResults() {
+	// 折叠系统介绍区域（带动画）
+const introSection = document.querySelector('.bg-white.rounded-xl.shadow-sm.p-6.mb-8');
+if (introSection && !introSection.classList.contains('hidden')) {
+  introSection.style.transition = 'max-height 0.4s ease, opacity 0.4s ease, padding 0.4s ease';
+  introSection.style.maxHeight = introSection.scrollHeight + 'px';
+  introSection.style.overflow = 'hidden';
+  // 强制重排以启用过渡
+  void introSection.offsetHeight;
+  introSection.style.maxHeight = '0px';
+  introSection.style.opacity = '0';
+  introSection.style.paddingTop = '0';
+  introSection.style.paddingBottom = '0';
+
+  // 动画结束后隐藏
+  introSection.addEventListener('transitionend', () => {
+    introSection.classList.add('hidden');
+    // 清理内联样式，避免影响后续展开
+    introSection.style.removeProperty('max-height');
+    introSection.style.removeProperty('opacity');
+    introSection.style.removeProperty('padding-top');
+    introSection.style.removeProperty('padding-bottom');
+  }, { once: true });
+}
+      const resultsBody = document.getElementById('results-body');
+      const totalProjectsEl = document.getElementById('total-projects');
+      const personCluesEl = document.getElementById('person-clues');
+      const contactCluesEl = document.getElementById('contact-clues');
+      const addressCluesEl = document.getElementById('address-clues');
+      const paginationEl = document.getElementById('pagination');
+      const showingCountEl = document.getElementById('showing-count');
+      const totalCountEl = document.getElementById('total-count');
+      
+      // 清空现有结果
+      resultsBody.innerHTML = '';
+      
+      // 计算统计数据
+      const uniqueProjects = new Set(analysisResults.map(r => `${r.projectId}-${r.projectName}`));
+      const personClues = analysisResults.filter(r => r.type === '人员').length;
+      const phoneClues = analysisResults.filter(r => r.type === '电话').length;
+      const emailClues = analysisResults.filter(r => r.type === '邮箱').length;
+      const addressClues = analysisResults.filter(r => r.type === '地址').length;
+      
+      // 更新统计数据
+      totalProjectsEl.textContent = uniqueProjects.size;
+      personCluesEl.textContent = personClues;
+      contactCluesEl.textContent = phoneClues + emailClues;
+      addressCluesEl.textContent = addressClues;
+      
+      // 显示结果
+      if (analysisResults.length === 0) {
+        resultsBody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-neutral-500">未发现任何交叉线索</td></tr>';
+        paginationEl.style.display = 'none';
+        return;
+      }
+      
+      // 填充结果表格
+      analysisResults.forEach(result => {
+        const row = document.createElement('tr');
+        row.className = 'hover:bg-neutral-50 transition-colors';
+        
+        // 类型标签样式
+        let typeClass = '';
+        switch(result.type) {
+          case '人员':
+            typeClass = 'bg-warning/10 text-warning';
+            break;
+          case '电话':
+          case '邮箱':
+            typeClass = 'bg-danger/10 text-danger';
+            break;
+          case '地址':
+            typeClass = 'bg-success/10 text-success';
+            break;
+        }
+        
+        row.innerHTML = `
+          <td class="py-3 px-4 border-b text-sm">${result.projectId}</td>
+          <td class="py-3 px-4 border-b text-sm">${result.projectName}</td>
+          <td class="py-3 px-4 border-b text-sm"><span class="px-2 py-1 ${typeClass} rounded-full text-xs">${result.type}</span></td>
+          <td class="...">${
+  result.sameInfo instanceof Date && !isNaN(result.sameInfo)
+    ? result.sameInfo.toISOString().slice(0,10)
+    : result.sameInfo
+}</td>
+          <td class="py-3 px-4 border-b text-sm">${result.description}</td>
+        `;
+        
+        resultsBody.appendChild(row);
+      });
+      
+      // 更新分页信息
+      paginationEl.style.display = 'flex';
+      showingCountEl.textContent = analysisResults.length;
+      totalCountEl.textContent = analysisResults.length;
+    }
+    
+    // 筛选结果
+    function filterResults() {
+      const typeValue = document.getElementById('type-filter').value;
+      const projectValue = document.getElementById('project-filter').value.toLowerCase();
+      const rows = document.querySelectorAll('#results-table tbody tr');
+      let visibleCount = 0;
+      
+      rows.forEach(row => {
+        // 跳过空状态行
+        if (row.querySelector('td[colspan="5"]')) {
+          row.style.display = analysisResults.length === 0 ? '' : 'none';
+          return;
+        }
+        
+        const type = row.querySelector('td:nth-child(3) span').textContent;
+        const projectId = row.querySelector('td:first-child').textContent.toLowerCase();
+        const projectName = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
+        
+        const typeMatch = typeValue === 'all' || type === typeValue;
+        const projectMatch = projectValue === '' || 
+                            projectId.includes(projectValue) || 
+                            projectName.includes(projectValue);
+        
+        if (typeMatch && projectMatch) {
+          row.style.display = '';
+          visibleCount++;
+        } else {
+          row.style.display = 'none';
+        }
+      });
+      
+      // 更新分页显示
+      document.getElementById('showing-count').textContent = visibleCount;
+    }
+    
+    // 导出结果
+    function exportResults() {
+      if (analysisResults.length === 0) {
+        showNotification('warning', '无结果可导出', '没有分析结果可供导出');
+        return;
+      }
+      
+      // 准备导出数据
+      const exportData = analysisResults.map(result => ({
+        '采办-标段编号': result.projectId,
+        '采办标段名称': result.projectName,
+        '类型': result.type,
+        '相同信息': (result.sameInfo instanceof Date && !isNaN(result.sameInfo)
+            ? result.sameInfo.toISOString().slice(0,10)
+            : result.sameInfo),
+        '情况描述': result.description
+      }));
+      
+      // 创建工作簿和工作表
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, '串通投标线索分析结果');
+      
+      // 生成文件名（包含当前日期）
+      const today = new Date();
+      const dateStr = `${today.getFullYear()}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
+      const fileName = `采办项目疑似串通投标分析结果_${dateStr}.xlsx`;
+      
+      // 导出文件
+      XLSX.writeFile(workbook, fileName);
+      showNotification('success', '导出成功', `分析结果已导出为：${fileName}`);
+    }
+    
+    // 通知提示功能
+    function showNotification(type, title, message) {
+      const notification = document.getElementById('notification');
+      const icon = document.getElementById('notification-icon');
+      const titleEl = document.getElementById('notification-title');
+      const messageEl = document.getElementById('notification-message');
+      
+      // 设置通知类型
+      icon.className = '';
+      if (type === 'success') {
+        icon.className = 'fa fa-check-circle text-success text-xl mt-0.5 mr-3';
+      } else if (type === 'error') {
+        icon.className = 'fa fa-exclamation-circle text-danger text-xl mt-0.5 mr-3';
+      } else if (type === 'info') {
+        icon.className = 'fa fa-info-circle text-primary text-xl mt-0.5 mr-3';
+      } else if (type === 'warning') {
+        icon.className = 'fa fa-exclamation-triangle text-warning text-xl mt-0.5 mr-3';
+      }
+      
+      // 设置内容
+      titleEl.textContent = title;
+      messageEl.textContent = message;
+      
+      // 显示通知
+      notification.classList.remove('hidden', 'translate-y-20', 'opacity-0');
+      notification.classList.add('translate-y-0', 'opacity-100');
+      
+      // 自动关闭
+      setTimeout(hideNotification, 5000);
+    }
+    
+    function hideNotification() {
+      const notification = document.getElementById('notification');
+      notification.classList.remove('translate-y-0', 'opacity-100');
+      notification.classList.add('translate-y-20', 'opacity-0');
+      
+      setTimeout(() => {
+        notification.classList.add('hidden');
+      }, 300);
+    }
+	/* ===== 折叠系统介绍 ===== */
+function collapseIntro() {
+  const intro = document.querySelector('.bg-white.rounded-xl.shadow-sm.p-6.mb-8'); // 方案 A
+  // const intro = document.getElementById('intro-panel');                       // 方案 B
+  if (!intro || intro.classList.contains('folding')) return;   // 防止重复触发
+
+  intro.classList.add('folding');          // 标记正在折叠
+  intro.style.transition = 'max-height 0.4s ease, opacity 0.4s ease, padding 0.4s ease';
+  intro.style.overflow = 'hidden';
+  // 让浏览器先计算出实际高度
+  intro.style.maxHeight = intro.scrollHeight + 'px';
+  intro.offsetHeight;                      // 强制 reflow
+  // 开始折叠
+  intro.style.maxHeight = '0px';
+  intro.style.opacity   = '0';
+  intro.style.paddingTop = '0';
+  intro.style.paddingBottom = '0';
+
+  intro.addEventListener('transitionend', () => {
+    intro.classList.add('hidden');
+    intro.classList.remove('folding');
+    // 清理内联样式，避免以后展开异常
+    ['transition','max-height','opacity','paddingTop','paddingBottom','overflow']
+      .forEach(k => intro.style.removeProperty(k));
+  }, { once: true });
+}
+/* ===== 重新导入数据按钮事件 ===== */
+document.getElementById('reimport-btn').addEventListener('click', function () {
+  // 1. 清空已导入数据
+  for (let key in importedData) importedData[key] = null;
+
+  // 2. 清空分析结果
+  analysisResults = [];
+
+  // 3. 隐藏结果区域
+  document.getElementById('results-section').classList.add('hidden');
+
+  // 4. 显示导入区域
+  document.querySelector('section').classList.remove('hidden');
+
+  // 5. 禁用分析按钮
+  document.getElementById('analyze-btn').setAttribute('disabled', 'true');
+
+  // 6. 重置所有文件预览区
+  document.querySelectorAll('.file-preview').forEach(preview => {
+    preview.classList.add('hidden');
+    const dropArea = preview.previousElementSibling;
+    dropArea.classList.remove('hidden');
+    const input = dropArea.querySelector('input[type="file"]');
+    if (input) input.value = '';
+  });
+
+  // 7. 默认展开第一个表格
+  const firstHeader = document.querySelector('.import-header');
+  const firstContent = document.getElementById('table1-content');
+  const firstIcon   = firstHeader.querySelector('i');
+  firstContent.classList.remove('hidden');
+  firstIcon.classList.add('rotate-180');
+
+  // 8. 回到顶部
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  showNotification('info', '已重置', '请重新导入所有数据表格');
+});
+  </script>
+<!-- 回到首页：平滑滚动 + 清空数据 + 重置界面 -->
+<script>
+document.getElementById('btn-home').addEventListener('click', () => {
+  // 1. 淡出
+  document.body.style.transition = 'opacity 0.35s ease';
+  document.body.style.opacity = 0;
+
+  document.body.addEventListener('transitionend', () => {
+    // 2. 瞬间回到顶部
+    window.scrollTo({ top: 0, behavior: 'instant' });
+
+    // 3. 清空数据 & 界面
+    resetToHomePage();          // 新增：内部完成数据清空
+
+    // 4. 淡入
+    document.body.style.opacity = 1;
+  }, { once: true });
+});
+
+/* 一次性完成“回到首页 + 数据清空 + UI 重置” */
+function resetToHomePage() {
+  /* ---------- 1. 清空内存数据 ---------- */
+  Object.keys(importedData).forEach(k => importedData[k] = null);
+  analysisResults.length = 0;
+
+  /* ---------- 2. 隐藏结果区域 ---------- */
+  document.getElementById('results-section').classList.add('hidden');
+  document.getElementById('loading-section').classList.add('hidden');
+
+  /* ---------- 3. 显示导入区域 ---------- */
+  document.querySelector('section').classList.remove('hidden');
+
+  /* ---------- 4. 重置所有文件预览区 ---------- */
+  document.querySelectorAll('.file-preview').forEach(preview => {
+    preview.classList.add('hidden');
+    const dropArea = preview.previousElementSibling;
+    dropArea.classList.remove('hidden');
+    const input = dropArea.querySelector('input[type="file"]');
+    if (input) input.value = '';          // 清空 file input
+  });
+
+  /* ---------- 5. 禁用分析按钮 ---------- */
+  document.getElementById('analyze-btn').setAttribute('disabled', 'true');
+
+  /* ---------- 6. 只展开第一个表格 ---------- */
+  // 先全部折叠
+  document.querySelectorAll('.import-header').forEach(h => {
+    const tgt = document.getElementById(h.dataset.target);
+    const ic = h.querySelector('i');
+    tgt.classList.add('hidden');
+    ic.classList.remove('rotate-180');
+  });
+  // 再展开第一个
+  const firstHeader = document.querySelector('.import-header');
+  const firstContent = document.getElementById('table1-content');
+  const firstIcon   = firstHeader.querySelector('i');
+  firstContent.classList.remove('hidden');
+  firstIcon.classList.add('rotate-180');
+
+  /* ---------- 7. 提示用户 ---------- */
+  showNotification('info', '已回到首页', '此前导入的数据已清空，请重新上传');
+}
+</script>
+</body>
+</html>
